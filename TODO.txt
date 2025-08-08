@@ -1,0 +1,12 @@
+API endpointlerinden GTFS dosyası import edilebilen bir FastAPI servisi ve bu servisin rabbitmq + celery ile asenkron olarak import işlemi yapması
+
+1) Elinizde bulunan dosya içeriğine uygun PostgreSQL tabloları oluşturulmalı
+2) GTFS tabloları ile sorgu yapılabilmeli
+3) Her GTFS yüklemesinin bir snapshot_id'si olmalı ve buna göre sorgu yapılabilmeli
+4) GTFS yüklemesi asenkron gerçekleştirilmeli. GTFS yüklemesi sırasında request bekletilmemeli ve işlemin kuyruğa alındığı bilgisi iletilmeli
+5) Dosya yükleme sırasında aynı anda diğer endpointler kullanılabilmeli
+6) FastAPI resmi dökümantasyonundaki patternler kullanılmalı
+7) Dockerize edilmeli ve docker-compose dosyası ile çalışmalı
+8) Yapıyı NGINX serve etmeli.
+9) Import sonrasında dosyalar sunucuda birikmemeli
+10) Import sonucu veritabanında bir tabloda yer almalı. Sonuçlar QUEUE, SUCCESS, FAILED şeklinde yazmalı.

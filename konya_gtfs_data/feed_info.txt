@@ -1,0 +1,2 @@
+feed_publisher_name,feed_publisher_url,feed_lang,feed_start_date,feed_end_date,feed_version,feed_contact_email,feed_contact_url
+Konya Büyükşehir Belediyesi,https://www.konya.bel.tr/,tr,20240101,20301231,1.16,bim@konya.bel.tr,https://www.konya.bel.tr/s/adres-ve-iletisim
