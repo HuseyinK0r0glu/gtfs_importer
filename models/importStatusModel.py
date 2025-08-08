@@ -1,12 +1,12 @@
 from sqlalchemy import Column , String ,Integer , DateTime , Text , Enum
 from db.database import Base
 from datetime import datetime
-from enums import importStatusEnum
+from enums.importStatusEnum import importStatusEnum
 
 class importStatus(Base):
     __tablename__ = "import_status"
 
-    id = Column(String,primary_key=True)
+    id = Column(Integer,primary_key=True,autoincrement=True)
     snapshot_id = Column(String, nullable=False)
     status = Column(Enum(importStatusEnum), nullable=False, default=importStatusEnum.PENDING)
     task_id = Column(String, nullable=True)
