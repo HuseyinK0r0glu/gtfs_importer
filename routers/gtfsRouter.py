@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 import shutil
 import tempfile
 import zipfile
-import csv 
+import json
 import os
 import uuid
 from datetime import datetime
@@ -65,3 +65,20 @@ async def gtfsImporter(file : UploadFile = File(...) , db : Session = Depends(ge
         if os.path.exists(tmp_zip_path):
             os.remove(tmp_zip_path)
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+async def getImportBySnapshot(snapshot_id : str , db : Session = Depends(get_db)):
+
+    import_status = db.query(importStatus).filter(importStatus.snapshot_id == snapshot_id).first()
+
+    if not importStatus:
+        raise HTTPException(status_code=404,detail="Import status not found")
+    
+    return {
+        "snapshot_id": import_status.snapshot_id,
+        "status": import_status.status.value,
+        "task_id": import_status.task_id,
+        "created_at": import_status.created_at,
+        "completed_at": import_status.completed_at,
+        "result": json.loads(import_status.result) if import_status.result else None,
+        "error_message": import_status.error_message
+    }

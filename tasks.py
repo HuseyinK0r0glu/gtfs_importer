@@ -15,13 +15,30 @@ from models.stopModel import Stop
 from enums.importStatusEnum import importStatusEnum  
 from models.importStatusModel import importStatus
 
+def determineOverallStatus(results):
+    if not results:
+        return importStatusEnum.PENDING
+
+    allSuccess = True
+
+    for result in results:
+        if result.get('status') == "FAILED":
+            allSuccess = False
+            return importStatusEnum.REJECTED        
+        elif result.get('status') == "PENDING":
+            allSuccess = False
+
+    if allSuccess:
+        return importStatusEnum.ACCEPTED
+    
+    return importStatusEnum.PENDING
+
+
 def update_import_status(snapshot_id, status, result=None, error_message=None):
     db = SessionLocal()
     try:
         import_status = db.query(importStatus).filter(importStatus.snapshot_id == snapshot_id).first()
         if import_status:
-            import_status.status = status
-            import_status.completed_at = datetime.utcnow()
             
             if result:
                 try:
@@ -37,9 +54,21 @@ def update_import_status(snapshot_id, status, result=None, error_message=None):
                     combined_result = [existing_result, result]
 
                 import_status.result = json.dumps(combined_result)
+                
+                overallStatus = determineOverallStatus(combined_result)
+            else:
+                try:
+                    existing_results = json.loads(import_status.result) if import_status.result else []
+                    overallStatus = determineOverallStatus(existing_results)
+                except Exception:
+                    overallStatus = importStatusEnum.PENDING
+
+            import_status.status = overallStatus
+            import_status.completed_at = datetime.utcnow()
+            
             if error_message:
                 import_status.error_message = error_message
-                
+            
             db.commit()
     finally:
         db.close()

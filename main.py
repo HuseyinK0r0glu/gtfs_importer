@@ -12,6 +12,7 @@ Base.metadata.create_all(bind=engine)
 
 app.add_api_route("/firstApiCall",gtfsRouter.firstApiCall,methods=["GET"])
 app.add_api_route("/upload-gtfs",gtfsRouter.gtfsImporter,methods=["POST"])
+app.add_api_route("/imports/{snapshot_id}",gtfsRouter.getImportBySnapshot,methods=["GET"])
 
 if __name__ == "__main__":
     import uvicorn 
