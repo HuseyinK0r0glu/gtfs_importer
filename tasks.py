@@ -12,6 +12,7 @@ import uuid
 from db.database import SessionLocal
 from models.routeModel import Route
 from models.stopModel import Stop
+from models.agencyModel import Agency
 from enums.importStatusEnum import importStatusEnum  
 from models.importStatusModel import importStatus
 
@@ -111,7 +112,7 @@ def process_gtfs_routes(self,tmp_zip_path,snapshot_id):
                         route_color=row.get("route_color", ""),
                         route_text_color=row.get("route_text_color", "")
                     )
-                    db.add(route)
+                    db.merge(route)
                     routesCount+=1
                 db.commit()
 
@@ -182,7 +183,7 @@ def process_gtfs_stops(self,tmp_zip_path,snapshot_id):
                         zone_id=row.get("zone_id", ""),
                         stop_url=row.get("stop_url", "")
                     )
-                    db.add(stop)
+                    db.merge(stop)
                     stopsCount+=1
                 db.commit()
 
@@ -202,6 +203,79 @@ def process_gtfs_stops(self,tmp_zip_path,snapshot_id):
         except Exception as e:
             db.rollback()
             raise Exception(f"Error processing stops: {str(e)}")
+        finally:
+            db.close()
+            # Clean up temp files even if error occurs
+            if os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir)
+    except Exception as e:
+
+        update_import_status(snapshot_id, importStatusEnum.REJECTED, None, str(e))
+        
+        return {
+            'status': 'FAILED',
+            'snapshot_id': snapshot_id,
+            'error': str(e)
+        }
+
+@celery_app.task(bind=True)
+def process_gtfs_agency(self,tmp_zip_path,snapshot_id):
+
+    if not snapshot_id:
+        snapshot_id = str(uuid.uuid4())
+
+    try:
+
+        self.update_state(state='PROGRESS', meta={'status': 'Processing agency...'})
+
+        db = SessionLocal()
+
+        tmp_dir = tempfile.mkdtemp()
+
+        try:
+            with zipfile.ZipFile(tmp_zip_path,"r") as zip_ref:
+                zip_ref.extractall(tmp_dir)
+
+            agency_path = os.path.join(tmp_dir,"agency.txt")
+            if not os.path.exists(agency_path):
+                raise HTTPException(status_code=400, detail="agency.txt not found in zip")
+
+
+            with open(agency_path,newline='',encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                agencyCount = 0
+                for row in reader:
+
+                    agency = Agency(
+                        agency_id=row["agency_id"],
+                        agency_name=row['agency_name'],
+                        agency_url=row['agency_url'],
+                        agency_timezone=row['agency_timezone'],
+                        agency_lang=row['agency_lang'],
+                        agency_phone=row['agency_phone'],
+                        agency_fare_url=row['agency_fare_url'],
+                        agency_email=row['agency_email']
+                    )
+                    db.merge(agency)
+                    agencyCount+=1
+                db.commit()
+
+                shutil.rmtree(tmp_dir)
+
+                result = {
+                    'status': 'SUCCESS',
+                    'snapshot_id': snapshot_id,
+                    'agencies_imported': agencyCount,
+                    'message': f'Successfully imported {agencyCount} agencies'
+                }
+
+                update_import_status(snapshot_id, importStatusEnum.ACCEPTED, result)
+
+                return result
+            
+        except Exception as e:
+            db.rollback()
+            raise Exception(f"Error processing agency: {str(e)}")
         finally:
             db.close()
             # Clean up temp files even if error occurs

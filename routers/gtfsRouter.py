@@ -12,7 +12,7 @@ from db.database import get_db
 from models.routeModel import Route
 from models.importStatusModel import importStatus
 from enums.importStatusEnum import importStatusEnum
-from tasks import process_gtfs_routes , process_gtfs_stops
+from tasks import process_gtfs_routes , process_gtfs_stops , process_gtfs_agency
 
 async def firstApiCall():
     return {"message" : "Hello World"}
@@ -45,14 +45,16 @@ async def gtfsImporter(file : UploadFile = File(...) , db : Session = Depends(ge
 
         routes_task = process_gtfs_routes.delay(tmp_zip_path,snapshot_id)
         stops_task = process_gtfs_stops.delay(tmp_zip_path,snapshot_id)
+        agency_task = process_gtfs_agency.delay(tmp_zip_path,snapshot_id)
 
-        import_status.task_id = f"{routes_task.id},{stops_task.id}" 
+        import_status.task_id = f"{routes_task.id},{stops_task.id},{agency_task.id}" 
         db.commit()
 
         return {
             "message" : "GTFS files queued for processing",
             "snapshot_id" : snapshot_id,
             "task_ids" : {
+                "agency": agency_task.id,
                 "routes": routes_task.id,
                 "stops": stops_task.id
             },
@@ -70,15 +72,26 @@ async def getImportBySnapshot(snapshot_id : str , db : Session = Depends(get_db)
 
     import_status = db.query(importStatus).filter(importStatus.snapshot_id == snapshot_id).first()
 
-    if not importStatus:
-        raise HTTPException(status_code=404,detail="Import status not found")
+    if not import_status:
+        raise HTTPException(status_code=404, detail="Import status not found")
     
-    return {
-        "snapshot_id": import_status.snapshot_id,
-        "status": import_status.status.value,
-        "task_id": import_status.task_id,
-        "created_at": import_status.created_at,
-        "completed_at": import_status.completed_at,
-        "result": json.loads(import_status.result) if import_status.result else None,
-        "error_message": import_status.error_message
-    }
+    try:
+        result_data = None
+        if import_status.result:
+            try:
+                result_data = json.loads(import_status.result)
+            except json.JSONDecodeError:
+                result_data = import_status.result
+        
+        return {
+            "snapshot_id": import_status.snapshot_id,
+            "status": import_status.status.value if import_status.status else None,
+            "task_id": import_status.task_id,
+            "created_at": import_status.created_at,
+            "completed_at": import_status.completed_at,
+            "result": result_data,
+            "error_message": import_status.error_message
+        }
+    except Exception as e:
+        print(f"Error in getImportBySnapshot: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
