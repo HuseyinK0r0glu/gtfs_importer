@@ -12,7 +12,7 @@ from db.database import get_db
 from models.routeModel import Route
 from models.importStatusModel import importStatus
 from enums.importStatusEnum import importStatusEnum
-from tasks import process_gtfs_routes
+from tasks import process_gtfs_routes , process_gtfs_stops
 
 async def firstApiCall():
     return {"message" : "Hello World"}
@@ -43,15 +43,19 @@ async def gtfsImporter(file : UploadFile = File(...) , db : Session = Depends(ge
         db.add(import_status)
         db.commit()
 
-        task = process_gtfs_routes.delay(tmp_zip_path,snapshot_id)
+        routes_task = process_gtfs_routes.delay(tmp_zip_path,snapshot_id)
+        stops_task = process_gtfs_stops.delay(tmp_zip_path,snapshot_id)
 
-        import_status.task_id = task.id
+        import_status.task_id = f"{routes_task.id},{stops_task.id}" 
         db.commit()
 
         return {
-            "message" : "GTFS file queud for processing",
+            "message" : "GTFS files queued for processing",
             "snapshot_id" : snapshot_id,
-            "task_id" : task.id,
+            "task_ids" : {
+                "routes": routes_task.id,
+                "stops": stops_task.id
+            },
             "status" : "PENDING"
         }
 
