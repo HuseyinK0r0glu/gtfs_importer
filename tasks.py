@@ -21,19 +21,15 @@ def determineOverallStatus(results):
     if not results:
         return importStatusEnum.PENDING
 
-    allSuccess = True
-
     for result in results:
         if result.get('status') == "FAILED":
-            allSuccess = False
-            return importStatusEnum.REJECTED        
-        elif result.get('status') == "PENDING":
-            allSuccess = False
-
-    if allSuccess:
-        return importStatusEnum.ACCEPTED
+            return importStatusEnum.REJECTED
     
-    return importStatusEnum.PENDING
+    for result in results:
+        if result.get('status') == "PENDING":
+            return importStatusEnum.PENDING
+    
+    return importStatusEnum.ACCEPTED
 
 
 def update_import_status(snapshot_id, status, result=None, error_message=None):
@@ -140,13 +136,15 @@ def process_gtfs_routes(self,tmp_zip_path,snapshot_id):
                 shutil.rmtree(tmp_dir)
     except Exception as e:
 
-        update_import_status(snapshot_id, importStatusEnum.REJECTED, None, str(e))
-        
-        return {
+        failed_result = {
             'status': 'FAILED',
             'snapshot_id': snapshot_id,
             'error': str(e)
         }
+        
+        update_import_status(snapshot_id, importStatusEnum.REJECTED, failed_result, str(e))
+        
+        return failed_result
 
 
 @celery_app.task(bind=True)
@@ -211,13 +209,15 @@ def process_gtfs_stops(self,tmp_zip_path,snapshot_id):
                 shutil.rmtree(tmp_dir)
     except Exception as e:
 
-        update_import_status(snapshot_id, importStatusEnum.REJECTED, None, str(e))
-        
-        return {
+        failed_result = {
             'status': 'FAILED',
             'snapshot_id': snapshot_id,
             'error': str(e)
         }
+        
+        update_import_status(snapshot_id, importStatusEnum.REJECTED, failed_result, str(e))
+        
+        return failed_result
 
 @celery_app.task(bind=True)
 def process_gtfs_agency(self,tmp_zip_path,snapshot_id):
@@ -284,14 +284,17 @@ def process_gtfs_agency(self,tmp_zip_path,snapshot_id):
                 shutil.rmtree(tmp_dir)
     except Exception as e:
 
-        update_import_status(snapshot_id, importStatusEnum.REJECTED, None, str(e))
-        
-        return {
+        failed_result = {
             'status': 'FAILED',
             'snapshot_id': snapshot_id,
             'error': str(e)
         }
+        
+        update_import_status(snapshot_id, importStatusEnum.REJECTED, failed_result, str(e))
+        
+        return failed_result
     
+
 @celery_app.task(bind=True) 
 def process_gtfs_calendar_dates(self,tmp_zip_path,snapshot_id):
 
