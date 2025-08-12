@@ -95,3 +95,37 @@ async def getImportBySnapshot(snapshot_id : str , db : Session = Depends(get_db)
     except Exception as e:
         print(f"Error in getImportBySnapshot: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    
+async def getlAllImports(db : Session = Depends(get_db)):
+    imports = db.query(importStatus).all()
+
+    if not imports:
+        return []
+
+    try:
+        result = []
+
+        for import_status in imports:
+            result_data = None
+            if import_status.result:
+                try:
+                    result_data = json.loads(import_status.result)
+                except json.JSONDecodeError:
+                    result_data = import_status.result
+            
+            import_status_result = {
+                "snapshot_id": import_status.snapshot_id,
+                "status": import_status.status.value if import_status.status else None,
+                "task_id": import_status.task_id,
+                "created_at": import_status.created_at,
+                "completed_at": import_status.completed_at,
+                "result": result_data,
+                "error_message": import_status.error_message
+            }
+
+            result.append(import_status_result)
+
+        return result
+    except Exception as e:
+        print(f"Error in getImportBySnapshot: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
