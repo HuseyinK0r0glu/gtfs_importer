@@ -13,6 +13,7 @@ from db.database import SessionLocal
 from models.routeModel import Route
 from models.stopModel import Stop
 from models.agencyModel import Agency
+from models.calendarDatesModel import CalendarDates
 from enums.importStatusEnum import importStatusEnum  
 from models.importStatusModel import importStatus
 
@@ -276,6 +277,75 @@ def process_gtfs_agency(self,tmp_zip_path,snapshot_id):
         except Exception as e:
             db.rollback()
             raise Exception(f"Error processing agency: {str(e)}")
+        finally:
+            db.close()
+            # Clean up temp files even if error occurs
+            if os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir)
+    except Exception as e:
+
+        update_import_status(snapshot_id, importStatusEnum.REJECTED, None, str(e))
+        
+        return {
+            'status': 'FAILED',
+            'snapshot_id': snapshot_id,
+            'error': str(e)
+        }
+    
+@celery_app.task(bind=True) 
+def process_gtfs_calendar_dates(self,tmp_zip_path,snapshot_id):
+
+    if not snapshot_id:
+        snapshot_id = str(uuid.uuid4())
+
+    try:
+
+        self.update_state(state='PROGRESS', meta={'status': 'Processing calendar_dates...'})
+
+        db = SessionLocal()
+
+        tmp_dir = tempfile.mkdtemp()
+
+        try:
+            with zipfile.ZipFile(tmp_zip_path,"r") as zip_ref:
+                zip_ref.extractall(tmp_dir)
+
+            calendar_dates_path = os.path.join(tmp_dir,"calendar_dates.txt")
+            if not os.path.exists(calendar_dates_path):
+                raise HTTPException(status_code=400, detail="calendar_dates.txt not found in zip")
+
+
+            with open(calendar_dates_path,newline='',encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                calendarDates = 0
+                for row in reader:
+
+                    calendar_date = CalendarDates(
+                        service_id=row["service_id"],
+                        date=row["date"],
+                        exception_type=int(row["exception_type"])
+                    )
+
+                    db.merge(calendar_date)
+                    calendarDates+=1
+                db.commit()
+
+                shutil.rmtree(tmp_dir)
+
+                result = {
+                    'status': 'SUCCESS',
+                    'snapshot_id': snapshot_id,
+                    'calendar_dates_imported': calendarDates,
+                    'message': f'Successfully imported {calendarDates} calendar dates'
+                }
+
+                update_import_status(snapshot_id, importStatusEnum.ACCEPTED, result)
+
+                return result
+            
+        except Exception as e:
+            db.rollback()
+            raise Exception(f"Error processing calendar dates: {str(e)}")
         finally:
             db.close()
             # Clean up temp files even if error occurs
