@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from typing import List
 
 from routers import gtfsRouter
-from models import routeModel, importStatusModel, stopModel, agencyModel
+from models import calendarDatesModel, routeModel, importStatusModel, stopModel, agencyModel
 
 app = FastAPI()
 
