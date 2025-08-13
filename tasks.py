@@ -15,6 +15,7 @@ from models.stopModel import Stop
 from models.agencyModel import Agency
 from models.calendarDatesModel import CalendarDates
 from models.calendarModel import Calendar
+from models.tripsModel import Trip
 from enums.importStatusEnum import importStatusEnum  
 from models.importStatusModel import importStatus
 
@@ -427,6 +428,82 @@ def process_gtfs_calendars(self,tmp_zip_path,snapshot_id):
         except Exception as e:
             db.rollback()
             raise Exception(f"Error processing calendars: {str(e)}")
+        finally:
+            db.close()
+            # Clean up temp files even if error occurs
+            if os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir)
+    except Exception as e:
+
+        failed_result = {
+            'status': 'FAILED',
+            'snapshot_id': snapshot_id,
+            'error': str(e)
+        }
+        
+        update_import_status(snapshot_id, importStatusEnum.REJECTED, failed_result, str(e))
+        
+        return failed_result
+    
+
+@celery_app.task(bind=True)
+def process_gtfs_trips(self,tmp_zip_path,snapshot_id):
+
+    if not snapshot_id:
+        snapshot_id = str(uuid.uuid4())
+
+    try:
+
+        self.update_state(state='PROGRESS', meta={'status': 'Processing trips...'})
+
+        db = SessionLocal()
+
+        tmp_dir = tempfile.mkdtemp()
+
+        try:
+            with zipfile.ZipFile(tmp_zip_path,"r") as zip_ref:
+                zip_ref.extractall(tmp_dir)
+
+            trips_path = os.path.join(tmp_dir,"trips.txt")
+            if not os.path.exists(trips_path):
+                raise HTTPException(status_code=400, detail="trips.txt not found in zip")
+
+
+            with open(trips_path,newline='',encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                tripsCount = 0
+                for row in reader:
+
+                    trip = Trip(
+                        trip_id=row["trip_id"],
+                        route_id=row["route_id"], 
+                        service_id=row["service_id"],
+                        trip_headsign=row["trip_headsign"],
+                        direction_id=row["direction_id"],
+                        block_id=row["block_id"],
+                        shape_id=row["shape_id"]
+                    )
+
+                    db.merge(trip)
+                    tripsCount+=1
+                db.commit()
+
+                shutil.rmtree(tmp_dir)
+
+                result = {
+                    'status': 'SUCCESS',
+                    'snapshot_id': snapshot_id,
+                    'trips_imported': tripsCount,
+                    'message': f'Successfully imported {tripsCount} trips'
+                }
+
+                update_import_status(snapshot_id, importStatusEnum.ACCEPTED, result)
+
+                return result
+            
+        except Exception as e:
+            db.rollback()
+            raise Exception(f"Error processing trips: {str(e)}")
         finally:
             db.close()
             # Clean up temp files even if error occurs
