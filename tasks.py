@@ -14,6 +14,7 @@ from models.routeModel import Route
 from models.stopModel import Stop
 from models.agencyModel import Agency
 from models.calendarDatesModel import CalendarDates
+from models.calendarModel import Calendar
 from enums.importStatusEnum import importStatusEnum  
 from models.importStatusModel import importStatus
 
@@ -363,3 +364,82 @@ def process_gtfs_calendar_dates(self,tmp_zip_path,snapshot_id):
             'snapshot_id': snapshot_id,
             'error': str(e)
         }
+    
+
+@celery_app.task(bind=True)
+def process_gtfs_calendars(self,tmp_zip_path,snapshot_id):
+
+    if not snapshot_id:
+        snapshot_id = str(uuid.uuid4())
+
+    try:
+
+        self.update_state(state='PROGRESS', meta={'status': 'Processing calendars...'})
+
+        db = SessionLocal()
+
+        tmp_dir = tempfile.mkdtemp()
+
+        try:
+            with zipfile.ZipFile(tmp_zip_path,"r") as zip_ref:
+                zip_ref.extractall(tmp_dir)
+
+            calendars_path = os.path.join(tmp_dir,"calendar.txt")
+            if not os.path.exists(calendars_path):
+                raise HTTPException(status_code=400, detail="calendar.txt not found in zip")
+
+
+            with open(calendars_path,newline='',encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                calendarCount = 0
+                for row in reader:
+                    
+                    calendar = Calendar(
+                        service_id=row["service_id"],
+                        monday=row["monday"],
+                        tuesday=row["tuesday"],
+                        wednesday=row["wednesday"],
+                        thursday=row["thursday"],
+                        friday=row["friday"],
+                        saturday=row["saturday"],
+                        sunday=row["sunday"],
+                        start_date=row["start_date"],
+                        end_date=row["end_date"],
+                    )
+
+                    db.merge(calendar)
+                    calendarCount+=1
+                db.commit()
+
+                shutil.rmtree(tmp_dir)
+
+                result = {
+                    'status': 'SUCCESS',
+                    'snapshot_id': snapshot_id,
+                    'calendars_imported': calendarCount,
+                    'message': f'Successfully imported {calendarCount} calendars'
+                }
+
+                update_import_status(snapshot_id, importStatusEnum.ACCEPTED, result)
+
+                return result
+            
+        except Exception as e:
+            db.rollback()
+            raise Exception(f"Error processing calendars: {str(e)}")
+        finally:
+            db.close()
+            # Clean up temp files even if error occurs
+            if os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir)
+    except Exception as e:
+
+        failed_result = {
+            'status': 'FAILED',
+            'snapshot_id': snapshot_id,
+            'error': str(e)
+        }
+        
+        update_import_status(snapshot_id, importStatusEnum.REJECTED, failed_result, str(e))
+        
+        return failed_result
