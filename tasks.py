@@ -16,21 +16,24 @@ from models.agencyModel import Agency
 from models.calendarDatesModel import CalendarDates
 from models.calendarModel import Calendar
 from models.tripsModel import Trip
+from models.stopTimesModel import StopTime
 from enums.importStatusEnum import importStatusEnum  
 from models.importStatusModel import importStatus
 
-def determineOverallStatus(results):
+def determineOverallStatus(results, expected_task_count=7):
     if not results:
         return importStatusEnum.PENDING
 
+    # Check if any task failed
     for result in results:
         if result.get('status') == "FAILED":
             return importStatusEnum.REJECTED
     
-    for result in results:
-        if result.get('status') == "PENDING":
-            return importStatusEnum.PENDING
+    # Check if all expected tasks have completed
+    if len(results) < expected_task_count:
+        return importStatusEnum.PENDING
     
+    # All tasks completed successfully
     return importStatusEnum.ACCEPTED
 
 
@@ -55,11 +58,11 @@ def update_import_status(snapshot_id, status, result=None, error_message=None):
 
                 import_status.result = json.dumps(combined_result)
                 
-                overallStatus = determineOverallStatus(combined_result)
+                overallStatus = determineOverallStatus(combined_result, expected_task_count=7)
             else:
                 try:
                     existing_results = json.loads(import_status.result) if import_status.result else []
-                    overallStatus = determineOverallStatus(existing_results)
+                    overallStatus = determineOverallStatus(existing_results, expected_task_count=7)
                 except Exception:
                     overallStatus = importStatusEnum.PENDING
 
@@ -504,6 +507,92 @@ def process_gtfs_trips(self,tmp_zip_path,snapshot_id):
         except Exception as e:
             db.rollback()
             raise Exception(f"Error processing trips: {str(e)}")
+        finally:
+            db.close()
+            # Clean up temp files even if error occurs
+            if os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir)
+    except Exception as e:
+
+        failed_result = {
+            'status': 'FAILED',
+            'snapshot_id': snapshot_id,
+            'error': str(e)
+        }
+        
+        update_import_status(snapshot_id, importStatusEnum.REJECTED, failed_result, str(e))
+        
+        return failed_result
+    
+@celery_app.task(bind=True)
+def process_gtfs_stop_times(self,tmp_zip_path,snapshot_id):
+
+    if not snapshot_id:
+        snapshot_id = str(uuid.uuid4())
+
+    try:
+
+        self.update_state(state='PROGRESS', meta={'status': 'Processing stop times...'})
+
+        db = SessionLocal()
+
+        tmp_dir = tempfile.mkdtemp()
+
+        try:
+            with zipfile.ZipFile(tmp_zip_path,"r") as zip_ref:
+                zip_ref.extractall(tmp_dir)
+
+            stop_times_path = os.path.join(tmp_dir,"stop_times.txt")
+            if not os.path.exists(stop_times_path):
+                raise HTTPException(status_code=400, detail="stop_times.txt not found in zip")
+
+            with open(stop_times_path,newline='',encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                stopTimesCount = 0
+                batch_size = 1000  # Process in batches for better performance
+                
+                for row in reader:
+                    stopTime = StopTime(
+                        trip_id=row["trip_id"],
+                        stop_sequence=int(row["stop_sequence"]),
+                        arrival_time=row["arrival_time"],
+                        departure_time=row["departure_time"],
+                        stop_id=row["stop_id"],
+                        stop_headsign=row["stop_headsign"],
+                        pickup_type=row["pickup_type"],
+                        drop_off_type=row["drop_off_type"],
+                        shape_dist_traveled=row["shape_dist_traveled"],
+                    )
+
+                    db.merge(stopTime)
+                    stopTimesCount+=1
+                    
+                    # Commit in batches and update progress
+                    if stopTimesCount % batch_size == 0:
+                        db.commit()
+                        self.update_state(state='PROGRESS', meta={
+                            'status': f'Processed {stopTimesCount} stop times...'
+                        })
+                
+                # Final commit for remaining records
+                db.commit()
+
+                shutil.rmtree(tmp_dir)
+
+                result = {
+                    'status': 'SUCCESS',
+                    'snapshot_id': snapshot_id,
+                    'stop_times_imported': stopTimesCount,
+                    'message': f'Successfully imported {stopTimesCount} stop times'
+                }
+
+                update_import_status(snapshot_id, importStatusEnum.ACCEPTED, result)
+
+                return result
+            
+        except Exception as e:
+            db.rollback()
+            raise Exception(f"Error processing stop times: {str(e)}")
         finally:
             db.close()
             # Clean up temp files even if error occurs

@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Integer, PrimaryKeyConstraint
 from db.database import Base
 
-class StopTimes(Base):
+class StopTime(Base):
     __tablename__ = "stop_times"
 
     trip_id = Column(String, primary_key=True)

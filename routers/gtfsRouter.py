@@ -12,7 +12,7 @@ from db.database import get_db
 from models.routeModel import Route
 from models.importStatusModel import importStatus
 from enums.importStatusEnum import importStatusEnum
-from tasks import process_gtfs_routes , process_gtfs_stops , process_gtfs_agency , process_gtfs_calendar_dates , process_gtfs_calendars , process_gtfs_trips
+from tasks import process_gtfs_routes , process_gtfs_stops , process_gtfs_agency , process_gtfs_calendar_dates , process_gtfs_calendars , process_gtfs_trips , process_gtfs_stop_times
 
 async def firstApiCall():
     return {"message" : "Hello World"}
@@ -49,8 +49,9 @@ async def gtfsImporter(file : UploadFile = File(...) , db : Session = Depends(ge
         calendar_dates_task = process_gtfs_calendar_dates.delay(tmp_zip_path,snapshot_id)
         calendar_task = process_gtfs_calendars.delay(tmp_zip_path,snapshot_id)
         trips_task = process_gtfs_trips.delay(tmp_zip_path,snapshot_id)
+        stop_times_task = process_gtfs_stop_times.delay(tmp_zip_path,snapshot_id)
 
-        import_status.task_id = f"{routes_task.id},{stops_task.id},{agency_task.id},{calendar_dates_task.id},{calendar_task.id},{trips_task.id}" 
+        import_status.task_id = f"{routes_task.id},{stops_task.id},{agency_task.id},{calendar_dates_task.id},{calendar_task.id},{trips_task.id},{stop_times_task.id}" 
         db.commit()
 
         return {
@@ -62,7 +63,8 @@ async def gtfsImporter(file : UploadFile = File(...) , db : Session = Depends(ge
                 "stops": stops_task.id,
                 "calendar_dates": calendar_dates_task.id,
                 "calendar": calendar_task.id,
-                "trips": trips_task.id
+                "trips": trips_task.id,
+                "stop_times": stop_times_task.id
             },
             "status" : "PENDING"
         }
