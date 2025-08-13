@@ -24,16 +24,13 @@ def determineOverallStatus(results, expected_task_count=7):
     if not results:
         return importStatusEnum.PENDING
 
-    # Check if any task failed
     for result in results:
         if result.get('status') == "FAILED":
             return importStatusEnum.REJECTED
     
-    # Check if all expected tasks have completed
     if len(results) < expected_task_count:
         return importStatusEnum.PENDING
     
-    # All tasks completed successfully
     return importStatusEnum.ACCEPTED
 
 
@@ -58,17 +55,25 @@ def update_import_status(snapshot_id, status, result=None, error_message=None):
 
                 import_status.result = json.dumps(combined_result)
                 
+                # Determine overall status based on all results
                 overallStatus = determineOverallStatus(combined_result, expected_task_count=7)
+                import_status.status = overallStatus
+                
+                # Set completed_at when all tasks are finished
+                if overallStatus == importStatusEnum.ACCEPTED or overallStatus == importStatusEnum.REJECTED:
+                    import_status.completed_at = datetime.utcnow()
             else:
                 try:
                     existing_results = json.loads(import_status.result) if import_status.result else []
                     overallStatus = determineOverallStatus(existing_results, expected_task_count=7)
+                    import_status.status = overallStatus
+                    
+                    # Set completed_at when all tasks are finished
+                    if overallStatus == importStatusEnum.ACCEPTED or overallStatus == importStatusEnum.REJECTED:
+                        import_status.completed_at = datetime.utcnow()
                 except Exception:
-                    overallStatus = importStatusEnum.PENDING
+                    pass
 
-            import_status.status = overallStatus
-            import_status.completed_at = datetime.utcnow()
-            
             if error_message:
                 import_status.error_message = error_message
             
