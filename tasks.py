@@ -17,25 +17,52 @@ from models.calendarDatesModel import CalendarDates
 from models.calendarModel import Calendar
 from models.tripsModel import Trip
 from models.stopTimesModel import StopTime
+from models.shapesModel import Shape
 from enums.importStatusEnum import importStatusEnum  
 from models.importStatusModel import importStatus
 
-def determineOverallStatus(results, expected_task_count=7):
+def determineOverallStatus(snapshot_id,results, expected_task_count=8,db_session=None):
+
+    if db_session:
+        db = db_session
+        should_close = False
+    else:
+        db = SessionLocal()
+        should_close = True
+
+    import_status = db.query(importStatus).filter(importStatus.snapshot_id == snapshot_id).first()
+    
+    if not import_status:
+        print("import status not found")
+        return
+
     if not results:
         return importStatusEnum.PENDING
 
     for result in results:
         if result.get('status') == "FAILED":
+            import_status.completed_at = datetime.utcnow()
+            db.commit()
             return importStatusEnum.REJECTED
     
     if len(results) < expected_task_count:
         return importStatusEnum.PENDING
     
+    import_status.completed_at = datetime.utcnow()
+    db.commit()
     return importStatusEnum.ACCEPTED
 
 
-def update_import_status(snapshot_id, status, result=None, error_message=None):
-    db = SessionLocal()
+def update_import_status(snapshot_id, status, result=None, error_message=None, db_session=None):
+
+    #!!!
+    if db_session:
+        db = db_session
+        should_close = False
+    else:
+        db = SessionLocal()
+        should_close = True
+    
     try:
         import_status = db.query(importStatus).filter(importStatus.snapshot_id == snapshot_id).first()
         if import_status:
@@ -56,21 +83,15 @@ def update_import_status(snapshot_id, status, result=None, error_message=None):
                 import_status.result = json.dumps(combined_result)
                 
                 # Determine overall status based on all results
-                overallStatus = determineOverallStatus(combined_result, expected_task_count=7)
+                overallStatus = determineOverallStatus(snapshot_id,combined_result, expected_task_count=8,db_session=db)
                 import_status.status = overallStatus
                 
-                # Set completed_at when all tasks are finished
-                if overallStatus == importStatusEnum.ACCEPTED or overallStatus == importStatusEnum.REJECTED:
-                    import_status.completed_at = datetime.utcnow()
             else:
                 try:
                     existing_results = json.loads(import_status.result) if import_status.result else []
-                    overallStatus = determineOverallStatus(existing_results, expected_task_count=7)
+                    overallStatus = determineOverallStatus(snapshot_id,existing_results, expected_task_count=8,db_session=db)
                     import_status.status = overallStatus
                     
-                    # Set completed_at when all tasks are finished
-                    if overallStatus == importStatusEnum.ACCEPTED or overallStatus == importStatusEnum.REJECTED:
-                        import_status.completed_at = datetime.utcnow()
                 except Exception:
                     pass
 
@@ -79,7 +100,8 @@ def update_import_status(snapshot_id, status, result=None, error_message=None):
             
             db.commit()
     finally:
-        db.close()
+        if should_close:
+            db.close()
 
 @celery_app.task(bind=True)
 def process_gtfs_routes(self,tmp_zip_path,snapshot_id):
@@ -132,7 +154,7 @@ def process_gtfs_routes(self,tmp_zip_path,snapshot_id):
                     'message': f'Successfully imported {routesCount} routes'
                 }
 
-                update_import_status(snapshot_id, importStatusEnum.ACCEPTED, result)
+                update_import_status(snapshot_id, None, result, db_session=db)
 
                 return result
             
@@ -152,7 +174,7 @@ def process_gtfs_routes(self,tmp_zip_path,snapshot_id):
             'error': str(e)
         }
         
-        update_import_status(snapshot_id, importStatusEnum.REJECTED, failed_result, str(e))
+        update_import_status(snapshot_id, None, failed_result, str(e))
         
         return failed_result
 
@@ -205,7 +227,7 @@ def process_gtfs_stops(self,tmp_zip_path,snapshot_id):
                     'message': f'Successfully imported {stopsCount} stops'
                 }
 
-                update_import_status(snapshot_id, importStatusEnum.ACCEPTED, result)
+                update_import_status(snapshot_id, None, result, db_session=db)
 
                 return result
             
@@ -225,7 +247,7 @@ def process_gtfs_stops(self,tmp_zip_path,snapshot_id):
             'error': str(e)
         }
         
-        update_import_status(snapshot_id, importStatusEnum.REJECTED, failed_result, str(e))
+        update_import_status(snapshot_id, None, failed_result, str(e))
         
         return failed_result
 
@@ -280,7 +302,7 @@ def process_gtfs_agency(self,tmp_zip_path,snapshot_id):
                     'message': f'Successfully imported {agencyCount} agencies'
                 }
 
-                update_import_status(snapshot_id, importStatusEnum.ACCEPTED, result)
+                update_import_status(snapshot_id, None, result, db_session=db)
 
                 return result
             
@@ -300,7 +322,7 @@ def process_gtfs_agency(self,tmp_zip_path,snapshot_id):
             'error': str(e)
         }
         
-        update_import_status(snapshot_id, importStatusEnum.REJECTED, failed_result, str(e))
+        update_import_status(snapshot_id, None, failed_result, str(e))
         
         return failed_result
     
@@ -352,7 +374,7 @@ def process_gtfs_calendar_dates(self,tmp_zip_path,snapshot_id):
                     'message': f'Successfully imported {calendarDates} calendar dates'
                 }
 
-                update_import_status(snapshot_id, importStatusEnum.ACCEPTED, result)
+                update_import_status(snapshot_id, None, result, db_session=db)
 
                 return result
             
@@ -366,7 +388,7 @@ def process_gtfs_calendar_dates(self,tmp_zip_path,snapshot_id):
                 shutil.rmtree(tmp_dir)
     except Exception as e:
 
-        update_import_status(snapshot_id, importStatusEnum.REJECTED, None, str(e))
+        update_import_status(snapshot_id, None, None, str(e))
         
         return {
             'status': 'FAILED',
@@ -429,7 +451,7 @@ def process_gtfs_calendars(self,tmp_zip_path,snapshot_id):
                     'message': f'Successfully imported {calendarCount} calendars'
                 }
 
-                update_import_status(snapshot_id, importStatusEnum.ACCEPTED, result)
+                update_import_status(snapshot_id, None, result, db_session=db)
 
                 return result
             
@@ -449,7 +471,7 @@ def process_gtfs_calendars(self,tmp_zip_path,snapshot_id):
             'error': str(e)
         }
         
-        update_import_status(snapshot_id, importStatusEnum.REJECTED, failed_result, str(e))
+        update_import_status(snapshot_id, None, failed_result, str(e))
         
         return failed_result
     
@@ -505,7 +527,7 @@ def process_gtfs_trips(self,tmp_zip_path,snapshot_id):
                     'message': f'Successfully imported {tripsCount} trips'
                 }
 
-                update_import_status(snapshot_id, importStatusEnum.ACCEPTED, result)
+                update_import_status(snapshot_id, None, result, db_session=db)
 
                 return result
             
@@ -525,7 +547,7 @@ def process_gtfs_trips(self,tmp_zip_path,snapshot_id):
             'error': str(e)
         }
         
-        update_import_status(snapshot_id, importStatusEnum.REJECTED, failed_result, str(e))
+        update_import_status(snapshot_id, None, failed_result, str(e))
         
         return failed_result
     
@@ -591,7 +613,7 @@ def process_gtfs_stop_times(self,tmp_zip_path,snapshot_id):
                     'message': f'Successfully imported {stopTimesCount} stop times'
                 }
 
-                update_import_status(snapshot_id, importStatusEnum.ACCEPTED, result)
+                update_import_status(snapshot_id, None, result, db_session=db)
 
                 return result
             
@@ -611,6 +633,79 @@ def process_gtfs_stop_times(self,tmp_zip_path,snapshot_id):
             'error': str(e)
         }
         
-        update_import_status(snapshot_id, importStatusEnum.REJECTED, failed_result, str(e))
+        update_import_status(snapshot_id, None, failed_result, str(e))
+        
+        return failed_result
+    
+@celery_app.task(bind=True)
+def process_gtfs_shapes(self,tmp_zip_path,snapshot_id):
+
+    if not snapshot_id:
+        snapshot_id = str(uuid.uuid4())
+
+    try:
+
+        self.update_state(state='PROGRESS', meta={'status': 'Processing shapes...'})
+
+        db = SessionLocal()
+
+        tmp_dir = tempfile.mkdtemp()
+
+        try:
+            with zipfile.ZipFile(tmp_zip_path,"r") as zip_ref:
+                zip_ref.extractall(tmp_dir)
+
+            shapes_path = os.path.join(tmp_dir,"shapes.txt")
+            if not os.path.exists(shapes_path):
+                raise HTTPException(status_code=400, detail="shapes.txt not found in zip")
+
+
+            with open(shapes_path,newline='',encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                shapesCount = 0
+                for row in reader:
+
+                    shape = Shape(
+                        shape_id=row["shape_id"],
+                        shape_pt_sequence=int(row["shape_pt_sequence"]),
+                        shape_pt_lat=float(row["shape_pt_lat"]),
+                        shape_pt_lon=float(row["shape_pt_lon"]),
+                        shape_dist_traveled=row["shape_dist_traveled"],
+                    )
+
+                    db.merge(shape)
+                    shapesCount+=1
+                db.commit()
+
+                shutil.rmtree(tmp_dir)
+
+                result = {
+                    'status': 'SUCCESS',
+                    'snapshot_id': snapshot_id,
+                    'shapes_imported': shapesCount,
+                    'message': f'Successfully imported {shapesCount} shapes'
+                }
+
+                update_import_status(snapshot_id, None, result, db_session=db)
+
+                return result
+            
+        except Exception as e:
+            db.rollback()
+            raise Exception(f"Error processing shapes: {str(e)}")
+        finally:
+            db.close()
+            # Clean up temp files even if error occurs
+            if os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir)
+    except Exception as e:
+
+        failed_result = {
+            'status': 'FAILED',
+            'snapshot_id': snapshot_id,
+            'error': str(e)
+        }
+        
+        update_import_status(snapshot_id, None, failed_result, str(e))
         
         return failed_result
