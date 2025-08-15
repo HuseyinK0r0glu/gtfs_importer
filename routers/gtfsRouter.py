@@ -14,10 +14,12 @@ from models.importStatusModel import importStatus
 from enums.importStatusEnum import importStatusEnum
 from tasks import process_gtfs_routes , process_gtfs_stops , process_gtfs_agency , process_gtfs_calendar_dates , process_gtfs_calendars , process_gtfs_trips , process_gtfs_stop_times , process_gtfs_shapes
 
+from schemas.gtfs_schemas import GtfsImportResponse 
+
 async def firstApiCall():
     return {"message" : "Hello World"}
 
-async def gtfsImporter(file : UploadFile = File(...) , db : Session = Depends(get_db)):
+async def gtfsImporter(file : UploadFile = File(...) , db : Session = Depends(get_db)) -> GtfsImportResponse:
 
     if not file.filename.endswith(".zip"):
         raise HTTPException(status_code=400, detail="File must be a zip")
@@ -55,10 +57,10 @@ async def gtfsImporter(file : UploadFile = File(...) , db : Session = Depends(ge
         import_status.task_id = f"{routes_task.id},{stops_task.id},{agency_task.id},{calendar_dates_task.id},{calendar_task.id},{trips_task.id},{stop_times_task.id},{shapes_task.id}" 
         db.commit()
 
-        return {
-            "message" : "GTFS files queued for processing", 
-            "snapshot_id" : snapshot_id,
-            "task_ids" : {
+        return GtfsImportResponse(
+            message="GTFS files queued for processing", 
+            snapshot_id=snapshot_id,
+            task_ids={
                 "agency": agency_task.id,
                 "routes": routes_task.id,
                 "stops": stops_task.id,
@@ -68,8 +70,8 @@ async def gtfsImporter(file : UploadFile = File(...) , db : Session = Depends(ge
                 "stop_times": stop_times_task.id,
                 "shapes": shapes_task.id
             },
-            "status" : "PENDING"
-        }
+            status="PENDING"
+        )
 
     except Exception as e:
         # rollback undo changes made during that transcation

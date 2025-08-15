@@ -4,6 +4,8 @@ from typing import List
 from routers import gtfsRouter
 from models import calendarDatesModel , calendarModel , routeModel, importStatusModel, stopModel, agencyModel
 
+from schemas.gtfs_schemas import GtfsImportResponse
+
 app = FastAPI()
 
 from db.database import engine, Base 
@@ -11,7 +13,7 @@ from db.database import engine, Base
 Base.metadata.create_all(bind=engine)
 
 app.add_api_route("/firstApiCall",gtfsRouter.firstApiCall,methods=["GET"])
-app.add_api_route("/upload-gtfs",gtfsRouter.gtfsImporter,methods=["POST"])
+app.add_api_route("/upload-gtfs",gtfsRouter.gtfsImporter,methods=["POST"],response_model=GtfsImportResponse)
 app.add_api_route("/all_imports",gtfsRouter.getlAllImports,methods=["GET"])
 app.add_api_route("/imports/{snapshot_id}",gtfsRouter.getImportBySnapshot,methods=["GET"])
 

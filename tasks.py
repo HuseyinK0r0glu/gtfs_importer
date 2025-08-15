@@ -388,13 +388,15 @@ def process_gtfs_calendar_dates(self,tmp_zip_path,snapshot_id):
                 shutil.rmtree(tmp_dir)
     except Exception as e:
 
-        update_import_status(snapshot_id, None, None, str(e))
-        
-        return {
+        failed_result = {
             'status': 'FAILED',
             'snapshot_id': snapshot_id,
             'error': str(e)
         }
+        
+        update_import_status(snapshot_id, None, failed_result, str(e))
+        
+        return failed_result
     
 
 @celery_app.task(bind=True)
