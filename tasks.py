@@ -139,7 +139,8 @@ def process_gtfs_routes(self,tmp_zip_path,snapshot_id):
                         route_type=row.get("route_type", ""),
                         route_url=row.get("route_url", ""),
                         route_color=row.get("route_color", ""),
-                        route_text_color=row.get("route_text_color", "")
+                        route_text_color=row.get("route_text_color", ""),
+                        snapshot_id=snapshot_id
                     )
                     db.merge(route)
                     routesCount+=1
