@@ -18,7 +18,7 @@ from tasks import process_gtfs_routes , process_gtfs_stops , process_gtfs_agency
 
 from schemas.gtfs_schemas import GtfsImportResponse , ImportStatusResponse
 
-from service.ImportStatusService import get_import_status_by_snapshot_id
+from service.ImportStatusService import get_import_status_by_snapshot_id , get_all_import_statuses
 
 async def firstApiCall():
     return {"message" : "Hello World"}
@@ -114,7 +114,8 @@ async def getImportBySnapshot(snapshot_id : str , db : Session = Depends(get_db)
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     
 async def getlAllImports(db : Session = Depends(get_db)) -> List[ImportStatusResponse]:
-    imports = db.query(importStatus).all()
+    
+    imports = get_all_import_statuses(db)
 
     if not imports:
         return []
