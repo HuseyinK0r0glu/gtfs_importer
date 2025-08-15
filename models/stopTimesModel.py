@@ -6,6 +6,7 @@ class StopTime(Base):
 
     trip_id = Column(String, primary_key=True)
     stop_sequence = Column(Integer, primary_key=True)
+    snapshot_id = Column(String,primary_key=True)
     
     arrival_time = Column(String)
     departure_time = Column(String)
@@ -17,5 +18,5 @@ class StopTime(Base):
     
     # Define the composite primary key constraint
     __table_args__ = (
-        PrimaryKeyConstraint('trip_id', 'stop_sequence'),
+        PrimaryKeyConstraint('trip_id', 'stop_sequence','snapshot_id'),
     ) 

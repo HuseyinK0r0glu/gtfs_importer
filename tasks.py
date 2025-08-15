@@ -213,7 +213,8 @@ def process_gtfs_stops(self,tmp_zip_path,snapshot_id):
                         stop_lat=row.get("stop_lat", ""),
                         stop_lon=row.get("stop_lon", ""),
                         zone_id=row.get("zone_id", ""),
-                        stop_url=row.get("stop_url", "")
+                        stop_url=row.get("stop_url", ""),
+                        snapshot_id=snapshot_id
                     )
                     db.merge(stop)
                     stopsCount+=1
@@ -279,7 +280,6 @@ def process_gtfs_agency(self,tmp_zip_path,snapshot_id):
                 reader = csv.DictReader(csvfile)
                 agencyCount = 0
                 for row in reader:
-
                     agency = Agency(
                         agency_id=row["agency_id"],
                         agency_name=row['agency_name'],
@@ -288,7 +288,8 @@ def process_gtfs_agency(self,tmp_zip_path,snapshot_id):
                         agency_lang=row['agency_lang'],
                         agency_phone=row['agency_phone'],
                         agency_fare_url=row['agency_fare_url'],
-                        agency_email=row['agency_email']
+                        agency_email=row['agency_email'],
+                        snapshot_id=snapshot_id
                     )
                     db.merge(agency)
                     agencyCount+=1
@@ -359,7 +360,8 @@ def process_gtfs_calendar_dates(self,tmp_zip_path,snapshot_id):
                     calendar_date = CalendarDates(
                         service_id=row["service_id"],
                         date=row["date"],
-                        exception_type=int(row["exception_type"])
+                        exception_type=int(row["exception_type"]),
+                        snapshot_id=snapshot_id
                     )
 
                     db.merge(calendar_date)
@@ -427,7 +429,6 @@ def process_gtfs_calendars(self,tmp_zip_path,snapshot_id):
                 reader = csv.DictReader(csvfile)
                 calendarCount = 0
                 for row in reader:
-                    
                     calendar = Calendar(
                         service_id=row["service_id"],
                         monday=row["monday"],
@@ -439,6 +440,7 @@ def process_gtfs_calendars(self,tmp_zip_path,snapshot_id):
                         sunday=row["sunday"],
                         start_date=row["start_date"],
                         end_date=row["end_date"],
+                        snapshot_id=snapshot_id
                     )
 
                     db.merge(calendar)
@@ -506,7 +508,6 @@ def process_gtfs_trips(self,tmp_zip_path,snapshot_id):
                 reader = csv.DictReader(csvfile)
                 tripsCount = 0
                 for row in reader:
-
                     trip = Trip(
                         trip_id=row["trip_id"],
                         route_id=row["route_id"], 
@@ -514,7 +515,8 @@ def process_gtfs_trips(self,tmp_zip_path,snapshot_id):
                         trip_headsign=row["trip_headsign"],
                         direction_id=row["direction_id"],
                         block_id=row["block_id"],
-                        shape_id=row["shape_id"]
+                        shape_id=row["shape_id"],
+                        snapshot_id=snapshot_id
                     )
 
                     db.merge(trip)
@@ -592,6 +594,7 @@ def process_gtfs_stop_times(self,tmp_zip_path,snapshot_id):
                         pickup_type=row["pickup_type"],
                         drop_off_type=row["drop_off_type"],
                         shape_dist_traveled=row["shape_dist_traveled"],
+                        snapshot_id=snapshot_id
                     )
 
                     db.merge(stopTime)
@@ -667,13 +670,13 @@ def process_gtfs_shapes(self,tmp_zip_path,snapshot_id):
                 reader = csv.DictReader(csvfile)
                 shapesCount = 0
                 for row in reader:
-
                     shape = Shape(
                         shape_id=row["shape_id"],
                         shape_pt_sequence=int(row["shape_pt_sequence"]),
                         shape_pt_lat=float(row["shape_pt_lat"]),
                         shape_pt_lon=float(row["shape_pt_lon"]),
                         shape_dist_traveled=row["shape_dist_traveled"],
+                        snapshot_id=snapshot_id
                     )
 
                     db.merge(shape)
