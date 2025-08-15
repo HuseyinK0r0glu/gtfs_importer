@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict , Optional , Any
+from typing import Dict , Optional , Any , List
 from datetime import datetime
 
 class GtfsImportResponse(BaseModel):

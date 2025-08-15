@@ -8,6 +8,8 @@ import os
 import uuid
 from datetime import datetime
 
+from typing import List
+
 from db.database import get_db
 from models.routeModel import Route
 from models.importStatusModel import importStatus
@@ -109,7 +111,7 @@ async def getImportBySnapshot(snapshot_id : str , db : Session = Depends(get_db)
         print(f"Error in getImportBySnapshot: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     
-async def getlAllImports(db : Session = Depends(get_db)):
+async def getlAllImports(db : Session = Depends(get_db)) -> List[ImportStatusResponse]:
     imports = db.query(importStatus).all()
 
     if not imports:
@@ -126,19 +128,19 @@ async def getlAllImports(db : Session = Depends(get_db)):
                 except json.JSONDecodeError:
                     result_data = import_status.result
             
-            import_status_result = {
-                "snapshot_id": import_status.snapshot_id,
-                "status": import_status.status.value if import_status.status else None,
-                "task_id": import_status.task_id,
-                "created_at": import_status.created_at,
-                "completed_at": import_status.completed_at,
-                "result": result_data,
-                "error_message": import_status.error_message
-            }
+            import_status_response = ImportStatusResponse(
+                snapshot_id=import_status.snapshot_id,
+                status=import_status.status.value if import_status.status else None,
+                task_id=import_status.task_id,
+                created_at=import_status.created_at,
+                completed_at=import_status.completed_at,
+                result=result_data,
+                error_message=import_status.error_message
+            )
 
-            result.append(import_status_result)
+            result.append(import_status_response)
 
         return result
     except Exception as e:
-        print(f"Error in getImportBySnapshot: {str(e)}")
+        print(f"Error in getlAllImports: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

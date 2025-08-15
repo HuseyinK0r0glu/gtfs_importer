@@ -14,7 +14,7 @@ Base.metadata.create_all(bind=engine)
 
 app.add_api_route("/firstApiCall",gtfsRouter.firstApiCall,methods=["GET"])
 app.add_api_route("/upload-gtfs",gtfsRouter.gtfsImporter,methods=["POST"],response_model=GtfsImportResponse)
-app.add_api_route("/all_imports",gtfsRouter.getlAllImports,methods=["GET"])
+app.add_api_route("/all_imports",gtfsRouter.getlAllImports,methods=["GET"],response_model=List[ImportStatusResponse])
 app.add_api_route("/imports/{snapshot_id}",gtfsRouter.getImportBySnapshot,methods=["GET"],response_model=ImportStatusResponse)
 
 if __name__ == "__main__":  
