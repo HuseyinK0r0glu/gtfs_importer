@@ -14,7 +14,7 @@ from models.importStatusModel import importStatus
 from enums.importStatusEnum import importStatusEnum
 from tasks import process_gtfs_routes , process_gtfs_stops , process_gtfs_agency , process_gtfs_calendar_dates , process_gtfs_calendars , process_gtfs_trips , process_gtfs_stop_times , process_gtfs_shapes
 
-from schemas.gtfs_schemas import GtfsImportResponse 
+from schemas.gtfs_schemas import GtfsImportResponse , ImportStatusResponse
 
 async def firstApiCall():
     return {"message" : "Hello World"}
@@ -80,7 +80,7 @@ async def gtfsImporter(file : UploadFile = File(...) , db : Session = Depends(ge
             os.remove(tmp_zip_path)
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
-async def getImportBySnapshot(snapshot_id : str , db : Session = Depends(get_db)):
+async def getImportBySnapshot(snapshot_id : str , db : Session = Depends(get_db)) -> ImportStatusResponse:
 
     import_status = db.query(importStatus).filter(importStatus.snapshot_id == snapshot_id).first()
 
@@ -95,15 +95,16 @@ async def getImportBySnapshot(snapshot_id : str , db : Session = Depends(get_db)
             except json.JSONDecodeError:
                 result_data = import_status.result
         
-        return {
-            "snapshot_id": import_status.snapshot_id,
-            "status": import_status.status.value if import_status.status else None,
-            "task_id": import_status.task_id,
-            "created_at": import_status.created_at,
-            "completed_at": import_status.completed_at,
-            "result": result_data,
-            "error_message": import_status.error_message
-        }
+        return ImportStatusResponse(
+            snapshot_id=import_status.snapshot_id,
+            status=import_status.status.value if import_status.status else None,
+            task_id=import_status.task_id,
+            created_at=import_status.created_at,
+            completed_at=import_status.completed_at,
+            result=result_data,
+            error_message=import_status.error_message
+        )
+
     except Exception as e:
         print(f"Error in getImportBySnapshot: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
