@@ -13,7 +13,7 @@ from db.database import SessionLocal
 from models.routeModel import Route
 from models.stopModel import Stop
 from models.agencyModel import Agency
-from models.calendarDatesModel import CalendarDates
+from models.calendarDatesModel import CalendarDate
 from models.calendarModel import Calendar
 from models.tripsModel import Trip
 from models.stopTimesModel import StopTime
@@ -64,7 +64,8 @@ def update_import_status(snapshot_id, status, result=None, error_message=None, d
         should_close = True
     
     try:
-        import_status = db.query(importStatus).filter(importStatus.snapshot_id == snapshot_id).first()
+        # with_for_update locks the db until the current transaction is over
+        import_status = db.query(importStatus).filter(importStatus.snapshot_id == snapshot_id).with_for_update().first()
         if import_status:
             
             if result:
@@ -357,7 +358,7 @@ def process_gtfs_calendar_dates(self,tmp_zip_path,snapshot_id):
                 calendarDates = 0
                 for row in reader:
 
-                    calendar_date = CalendarDates(
+                    calendar_date = CalendarDate(
                         service_id=row["service_id"],
                         date=row["date"],
                         exception_type=int(row["exception_type"]),
