@@ -16,10 +16,11 @@ from models.importStatusModel import importStatus
 from enums.importStatusEnum import importStatusEnum
 from tasks import process_gtfs_routes , process_gtfs_stops , process_gtfs_agency , process_gtfs_calendar_dates , process_gtfs_calendars , process_gtfs_trips , process_gtfs_stop_times , process_gtfs_shapes
 
-from schemas.gtfs_schemas import GtfsImportResponse , ImportStatusResponse , RouteResponse
+from schemas.gtfs_schemas import GtfsImportResponse , ImportStatusResponse , RouteResponse , TripResponse
 
 from service.ImportStatusService import get_import_status_by_snapshot_id , get_all_import_statuses
 from service.RouteService import get_route_by_route_id
+from service.TripService import get_trips_by_route_id
 
 async def firstApiCall():
     return {"message" : "Hello World"}
@@ -167,3 +168,24 @@ async def getRouteById(snapshot_id : str  , route_id : str, db : Session = Depen
         route_color = route.route_color,
         route_text_color = route.route_text_color
     )
+
+async def getTripsByRoute(snapshot_id : str , route_id : str , db : Session = Depends(get_db)) -> List[TripResponse]:
+    
+    trips = get_trips_by_route_id(db,snapshot_id,route_id)
+
+    if not trips:
+        raise HTTPException(status_code=404, detail="No trips found for this route")
+
+    trip_responses = []
+    for trip in trips:
+        trip_response = TripResponse(
+            trip_id = trip.trip_id, 
+            service_id = trip.service_id,
+            trip_headsign = trip.trip_headsign,
+            direction_id = trip.direction_id,
+            block_id = trip.block_id,
+            shape_id = trip.shape_id
+        )
+        trip_responses.append(trip_response)
+
+    return trip_responses
