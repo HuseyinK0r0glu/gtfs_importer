@@ -18,6 +18,8 @@ from tasks import process_gtfs_routes , process_gtfs_stops , process_gtfs_agency
 
 from schemas.gtfs_schemas import GtfsImportResponse , ImportStatusResponse
 
+from service.ImportStatusService import get_import_status_by_snapshot_id
+
 async def firstApiCall():
     return {"message" : "Hello World"}
 
@@ -84,7 +86,7 @@ async def gtfsImporter(file : UploadFile = File(...) , db : Session = Depends(ge
 
 async def getImportBySnapshot(snapshot_id : str , db : Session = Depends(get_db)) -> ImportStatusResponse:
 
-    import_status = db.query(importStatus).filter(importStatus.snapshot_id == snapshot_id).first()
+    import_status = get_import_status_by_snapshot_id(db,snapshot_id)
 
     if not import_status:
         raise HTTPException(status_code=404, detail="Import status not found")
