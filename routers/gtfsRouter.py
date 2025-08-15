@@ -16,9 +16,10 @@ from models.importStatusModel import importStatus
 from enums.importStatusEnum import importStatusEnum
 from tasks import process_gtfs_routes , process_gtfs_stops , process_gtfs_agency , process_gtfs_calendar_dates , process_gtfs_calendars , process_gtfs_trips , process_gtfs_stop_times , process_gtfs_shapes
 
-from schemas.gtfs_schemas import GtfsImportResponse , ImportStatusResponse
+from schemas.gtfs_schemas import GtfsImportResponse , ImportStatusResponse , RouteResponse
 
 from service.ImportStatusService import get_import_status_by_snapshot_id , get_all_import_statuses
+from service.RouteService import get_route_by_route_id
 
 async def firstApiCall():
     return {"message" : "Hello World"}
@@ -147,3 +148,22 @@ async def getlAllImports(db : Session = Depends(get_db)) -> List[ImportStatusRes
     except Exception as e:
         print(f"Error in getlAllImports: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    
+async def getRouteById(snapshot_id : str  , route_id : str, db : Session = Depends(get_db)) -> RouteResponse:
+    
+    route = get_route_by_route_id(db,snapshot_id,route_id)
+
+    if not route:
+        raise HTTPException(status_code=404, detail="route not found")
+    
+    return RouteResponse(
+        route_id = route.route_id,
+        agency_id = route.agency_id,
+        route_short_name = route.route_short_name,
+        route_long_name= route.route_long_name,
+        route_type = route.route_type,
+        route_desc = route.route_desc,
+        route_url = route.route_url,
+        route_color = route.route_color,
+        route_text_color = route.route_text_color
+    )
